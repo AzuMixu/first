@@ -1,7 +1,13 @@
+import logging
+import traceback
+
 from fastapi import FastAPI, File, UploadFile, HTTPException
 
 from app.ocr_service import process_file
 from app.schemas import UploadResponse
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="报告识别服务",
@@ -43,6 +49,7 @@ async def upload_report(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        logger.error("文件处理失败:\n%s", traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"文件处理失败: {e}")
 
     return UploadResponse(success=True, message="识别完成", data=report)

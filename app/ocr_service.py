@@ -1,12 +1,30 @@
 import io
+import logging
 import re
 import tempfile
 from pathlib import Path
 from typing import List, Optional
 
-from PIL import Image
-
 from app.schemas import ReportField
+
+logger = logging.getLogger(__name__)
+
+# 检测可选依赖是否可用
+try:
+    from PIL import Image
+
+    HAS_PIL = True
+except ImportError:
+    HAS_PIL = False
+    logger.warning("Pillow 未安装，请运行: pip install Pillow")
+
+try:
+    from paddleocr import PaddleOCR
+
+    HAS_PADDLE = True
+except ImportError:
+    HAS_PADDLE = False
+    logger.warning("PaddleOCR 未安装，请运行: pip install paddleocr paddlepaddle")
 
 # PaddleOCR 延迟加载，避免启动时间过长
 _ocr_instance = None
@@ -14,17 +32,23 @@ _ocr_instance = None
 
 def get_ocr():
     global _ocr_instance
+    if not HAS_PADDLE:
+        raise RuntimeError(
+            "PaddleOCR 未安装。请运行: pip install paddleocr paddlepaddle"
+        )
     if _ocr_instance is None:
-        from paddleocr import PaddleOCR
-
         _ocr_instance = PaddleOCR(use_angle_cls=True, lang="ch", show_log=False)
     return _ocr_instance
 
 
-def pdf_to_images(pdf_bytes: bytes) -> List[Image.Image]:
+def pdf_to_images(pdf_bytes: bytes) -> list:
     """将 PDF 文件转为图片列表"""
-    from pdf2image import convert_from_bytes
-
+    try:
+        from pdf2image import convert_from_bytes
+    except ImportError:
+        raise RuntimeError(
+            "pdf2image 未安装。请运行: pip install pdf2image，并确保系统已安装 poppler-utils"
+        )
     return convert_from_bytes(pdf_bytes)
 
 
@@ -106,6 +130,9 @@ def _clean(value: Optional[str]) -> Optional[str]:
 
 async def process_file(file_bytes: bytes, filename: str) -> ReportField:
     """处理上传的文件，返回提取的字段信息"""
+    if not HAS_PIL:
+        raise RuntimeError("Pillow 未安装。请运行: pip install Pillow")
+
     suffix = Path(filename).suffix.lower()
 
     if suffix == ".pdf":

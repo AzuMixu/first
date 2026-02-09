@@ -18,6 +18,15 @@ app = FastAPI(
 ALLOWED_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif"}
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
 
+# content-type 到扩展名的映射，用于 filename 为空时的后备判断
+CONTENT_TYPE_MAP = {
+    "application/pdf": ".pdf",
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/bmp": ".bmp",
+    "image/tiff": ".tif",
+}
+
 
 @app.post(
     "/upload",
@@ -33,10 +42,19 @@ async def upload_report(
     suffix = ""
     if "." in filename:
         suffix = "." + filename.rsplit(".", 1)[1].lower()
+
+    # 如果从文件名无法获取扩展名，尝试从 content_type 推断
+    if suffix not in ALLOWED_EXTENSIONS and file.content_type:
+        suffix = CONTENT_TYPE_MAP.get(file.content_type, suffix)
+        if suffix and not filename:
+            filename = f"upload{suffix}"
+
+    logger.info("上传文件: filename=%s, content_type=%s, suffix=%s", filename, file.content_type, suffix)
+
     if suffix not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
-            detail=f"不支持的文件格式: {suffix}，请上传 PDF 或图片文件（{', '.join(ALLOWED_EXTENSIONS)}）",
+            detail=f"不支持的文件格式: {suffix or '(空)'}，请上传 PDF 或图片文件（{', '.join(ALLOWED_EXTENSIONS)}）",
         )
 
     # 读取文件内容
